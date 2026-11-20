@@ -9,6 +9,12 @@ def main():
     tracker = HandTracker()
     piano = Piano()
 
+    cv2.namedWindow("Virtual Instrument")
+    cv2.setMouseCallback(
+        "Virtual Instrument",
+        piano.handle_mouse
+    )
+
     try:
         while True:
             # 웹캠 영상 가져오기
@@ -53,11 +59,12 @@ def main():
             if key == 27:  # ESC
                 break
 
-            elif key == 81:  # 왼쪽 방향키
-                piano.change_octave(-1)
+            # 방향키로 전환
+            # elif key == 81:  # 왼쪽 방향키
+            #     piano.change_octave(-1)
 
-            elif key == 83:  # 오른쪽 방향키
-                piano.change_octave(1)
+            # elif key == 83:  # 오른쪽 방향키
+            #     piano.change_octave(1)
 
             
 

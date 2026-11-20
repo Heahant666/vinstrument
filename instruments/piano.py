@@ -22,12 +22,32 @@ class Piano:
         # 검은 건반 위치
         self.black_key_positions = [0, 1, 3, 4, 5]
 
+        # 옥타브 이동 버튼 위치
+        self.prev_button = (50, 80, 120, 130)
+        self.next_button = (520, 80, 590, 130)
+
     # 옥타브 이동
     def change_octave(self, direction):
-        self.octave += direction
+        self.octave = max(4, min(5, self.octave + direction))
 
-        # 일단 표시 범위를 1~7옥타브로 제한
-        self.octave = max(1, min(7, self.octave))
+    # 마우스 클릭 처리
+    def handle_mouse(self, event, x, y, flags, param):
+
+        if event == cv2.EVENT_LBUTTONDOWN: # 마우스 왼쪽버튼을 누르면
+
+            # 이전 옥타브 버튼의 좌표
+            x1, y1, x2, y2 = self.prev_button
+
+            # 누른 영역이 버튼 영역 안에 있다면 옥타브 변경
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                self.change_octave(-1)
+
+            # 다음 옥타브 버튼
+            x1, y1, x2, y2 = self.next_button
+
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                self.change_octave(1)
+        
 
     # 건반 그리기
     def draw(self, frame):
@@ -76,16 +96,44 @@ class Piano:
                 (20, 20, 20),
                 -1
             )
+        # 이전 옥타브 버튼
+        cv2.rectangle(
+            frame,
+            self.prev_button[:2],
+            self.prev_button[2:],
+            (100, 100, 100), -1
+        )
+
+        cv2.putText(
+            frame, "<",
+            (75, 115),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1, (255, 255, 255), 2
+        )
+
+        # 다음 옥타브 버튼
+        cv2.rectangle(
+            frame,
+            self.next_button[:2],
+            self.next_button[2:],
+            (100, 100, 100), -1
+        )
+
+        cv2.putText(
+            frame, ">",
+            (545, 115),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1, (255, 255, 255), 2
+        )
 
         # 옥타브 표시
         cv2.putText(
             frame,
             f"Octave {self.octave}",
-            (self.x, self.y - 20),
+            (250, 115),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 255, 0),
-            2
+            1, (0, 255, 0), 2
         )
+
 
         return frame
