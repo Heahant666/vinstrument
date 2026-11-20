@@ -1,7 +1,7 @@
 import cv2
 import mediapipe as mp
-import time
-from pathlib import Path
+import time # 영상의 프레임 시간 관리
+from pathlib import Path # 모델 파일의 경로 관리
 
 
 class HandTracker:
@@ -58,6 +58,7 @@ class HandTracker:
             (0, 17)
         ]
 
+    # 손을 인식하고 좌표를 반환하는 함수
     def process(self, frame):
         # 영상 크기 확인
         h, w, _ = frame.shape
@@ -70,7 +71,7 @@ class HandTracker:
             data=rgb_frame
         )
 
-        # VIDEO 모드에 필요한 타임스탬프
+        # VIDEO 모드에 필요한 타임스탬프:프레임의 시간정보
         timestamp_ms = int(
             (time.perf_counter() - self.start_time) * 1000
         )
@@ -80,7 +81,7 @@ class HandTracker:
         )
         self.last_timestamp = timestamp_ms
 
-        # 손 인식
+        # 손 인식, results에 랜드마크의 좌표정보(hand_landmark)와 손의 방향정보 (handedness)가 저장됨
         results = self.detector.detect_for_video(
             mp_image, timestamp_ms
         )
@@ -95,22 +96,23 @@ class HandTracker:
             "hands": []
         }
 
-        # 인식된 손이 없는 경우
+        # results.hand_landmarks에는 인식된 손의 랜드마크가 리스트로 저장되어있음. 인식된 손이 없는 경우
         if not results.hand_landmarks:
             return hand_data
 
-        # 인식된 모든 손을 순회
+        # 인식된 모든 손의 인덱스와 데이터를 가져옴
         for hand_index, landmarks in enumerate(results.hand_landmarks):
 
             # 왼손 / 오른손 정보
             handedness = "Unknown"
 
+            # 현재 손의 리스트 < 인식된 손의 방향 정보 수 라면 
             if hand_index < len(results.handedness):
                 handedness = (
-                    results.handedness[hand_index][0].category_name
+                    results.handedness[hand_index][0].category_name # handedness에 인식된 손의 방향 정보 저장
                 )
 
-            # 21개 관절을 픽셀 좌표로 변환
+            # 21개 관절의 정규화 좌표를 픽셀 좌표로 변환
             points = []
 
             for landmark in landmarks:
@@ -171,8 +173,7 @@ class HandTracker:
             }
 
             hand_data["hands"].append(one_hand)
-
-        hand_data["detected"] = len(hand_data["hands"]) > 0
+            hand_data["detected"] = len(hand_data["hands"]) > 0
 
         # 모든 손의 좌표 반환
         return hand_data

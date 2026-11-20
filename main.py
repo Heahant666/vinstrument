@@ -9,7 +9,9 @@ def main():
     tracker = HandTracker()
     piano = Piano()
 
-    cv2.namedWindow("Virtual Instrument")
+    
+    cv2.namedWindow("Virtual Instrument") # Virtual Instrument라는 창 생성
+    # Virtural Instrument 창에서 마우스 클릭이 발생할때마다 handle_mouse함수 실행 
     cv2.setMouseCallback(
         "Virtual Instrument",
         piano.handle_mouse
@@ -54,6 +56,7 @@ def main():
             # 화면 출력
             cv2.imshow("Virtual Instrument", frame)
 
+
             key = cv2.waitKey(1) & 0xFF
 
             if key == 27:  # ESC
@@ -74,5 +77,6 @@ def main():
         cv2.destroyAllWindows()
 
 
+# 직접 main을 실행했을때만 실행되도록 함
 if __name__ == "__main__":
     main()

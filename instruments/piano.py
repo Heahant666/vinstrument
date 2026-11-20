@@ -4,10 +4,10 @@ import cv2
 
 class Piano:
     def __init__(self):
-        self.x = 50
-        self.y = 250
-        self.width = 700
-        self.height = 200
+        self.x = 50 # 피아노를 그리기 시작할 왼쪽 첫 x좌표
+        self.y = 250 # 피아노를 그리기 시작할 왼쪽 첫 y좌표
+        self.width = 800 # 피아노의 너비
+        self.height = 200 # 피아노의 높이
 
         # 현재 표시할 옥타브
         self.octave = 4
@@ -28,7 +28,7 @@ class Piano:
 
     # 옥타브 이동
     def change_octave(self, direction):
-        self.octave = max(4, min(5, self.octave + direction))
+        self.octave = max(4, min(5, self.octave + direction)) # 옥타브 범위는 4-5로 제한
 
     # 마우스 클릭 처리
     def handle_mouse(self, event, x, y, flags, param):
@@ -52,12 +52,13 @@ class Piano:
     # 건반 그리기
     def draw(self, frame):
 
-        h, w, _ = frame.shape
+        h, w, _ = frame.shape # 웹캠 해상도의 높이,너비를 가져옴
 
-        # 화면 크기에 맞춰 건반 크기 설정
+        # 웹캠 해상도에 맞춰 건반 크기 다시 설정
         self.width = int(w * 0.9)
         self.height = int(h * 0.35)
 
+        # 건반을 화면 가운데에 배치
         self.x = (w - self.width) // 2
         self.y = int(h * 0.55)
 
@@ -67,15 +68,16 @@ class Piano:
 
         # 흰 건반
         for i in range(7):
-            x1 = int(self.x + i * self.white_key_width)
-            x2 = int(self.x + (i + 1) * self.white_key_width)
+            x1 = int(self.x + i * self.white_key_width) # 각 건반의 왼쪽끝 x좌표
+            x2 = int(self.x + (i + 1) * self.white_key_width) # 각 건반의 오른쪽끝 x좌표
 
+            # frame안에 왼쪽위, 오른쪽아래 범위에 흰색으로 색을 채움
             cv2.rectangle(
                 frame, (x1, self.y),
                 (x2, self.y + self.height),
                 (255, 255, 255), -1
             )
-
+            # 같은 사각형의 테두리, 2픽셀
             cv2.rectangle(
                 frame, (x1, self.y),
                 (x2, self.y + self.height),
@@ -84,11 +86,12 @@ class Piano:
 
         # 검은 건반
         for i in self.black_key_positions:
-            center_x = int(self.x + (i + 1) * self.white_key_width)
+            center_x = int(self.x + (i + 1) * self.white_key_width) # 검은 건반이 위치할 중심좌표
 
-            x1 = int(center_x - self.black_key_width / 2)
-            x2 = int(center_x + self.black_key_width / 2)
+            x1 = int(center_x - self.black_key_width / 2) # 검은 건반 왼쪽끝
+            x2 = int(center_x + self.black_key_width / 2) # 검은 건반 오른쪽끝
 
+            # 검은 건반 채우기
             cv2.rectangle(
                 frame,
                 (x1, int(self.y)),
