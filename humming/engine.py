@@ -25,7 +25,7 @@ class HummingEngine:
         self.sr = sr
         self.save_dir = save_dir
         self.state = IDLE
-        self.message = "Click the mic icon and hum 10~15 s"
+        self.message = "Click the mic icon and hum (max 15 s)"
         self.result: Optional[HummingResult] = None
         self.last_audio: Optional[np.ndarray] = None
 
@@ -43,7 +43,7 @@ class HummingEngine:
             self.result = None
             self.recorder.start()
             self.state = RECORDING
-            self.message = "Recording... click again to stop (after 10 s)"
+            self.message = "Recording... click again to stop (auto stop at 15 s)"
 
     def update(self) -> str:
         """매 프레임 호출. 15초가 되면 자동 종료"""
@@ -60,7 +60,7 @@ class HummingEngine:
         self.state = READY
         n = len(self.result.notes)
         unsure = sum(1 for x in self.result.notes if x.uncertain)
-        self.message = (f"{n} notes found ({unsure} to check). SPACE: play, hover a note to fix"
+        self.message = (f"{n} notes found ({unsure} to check). SPACE: play/stop, hover a note to fix"
                         if n else "No notes found. Hum louder / closer to the mic")
 
     def reset(self) -> None:
@@ -68,7 +68,7 @@ class HummingEngine:
         if self.state == RECORDING:
             self.recorder.stop()
         self.state, self.result = IDLE, None
-        self.message = "Click the mic icon and hum 10~15 s"
+        self.message = "Click the mic icon and hum (max 15 s)"
 
     # ---------- 수정 ----------
     @property
@@ -77,6 +77,8 @@ class HummingEngine:
 
     def options(self, index: int) -> List[int]:
         """해당 음에 대해 보여 줄 3개(원래 + 후보 2개)"""
+        if not (0 <= index < len(self.notes)):
+            return []
         return self.notes[index].options()
 
     def select(self, index: int, midi: int) -> None:
@@ -101,6 +103,16 @@ class HummingEngine:
 
     def playing_index(self) -> Optional[int]:
         return self.player.current_index() if hasattr(self.player, "current_index") else None
+
+    def is_playing(self) -> bool:
+        return self.player.is_playing() if hasattr(self.player, "is_playing") else (self.playing_index() is not None)
+
+    def toggle_play(self) -> None:
+        """재생 중이면 멈추고, 아니면 처음부터 재생."""
+        if self.is_playing():
+            self.stop()
+        else:
+            self.play_all()
 
     # ---------- 악기 쪽으로 넘기기 ----------
     def get_payload(self) -> List[dict]:

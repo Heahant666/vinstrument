@@ -131,13 +131,15 @@ class NoteEditor:
         return at
 
     # ---------- 직접 고르기 모드 ----------
+    # ---------- 직접 고르기 모드 ----------
     def begin_pick(self, at: int) -> bool:
         if not self._ready():
             return False
         ns = self.notes
         at = max(0, min(len(ns), at))
-        ref = ns[at - 1] if at > 0 else (ns[0] if ns else None)
-        self.pick_midi = ref.final_midi if ref else 60
+        lo, hi = self._note_range()
+        default_midi = 60  # 도4 (C4)
+        self.pick_midi = max(lo, min(hi, default_midi))
         self.pick_at = at
         self.message = "Pick: , / . = pitch  Enter = OK  c = cancel"
         self.engine.play_note(self.pick_midi, 300)

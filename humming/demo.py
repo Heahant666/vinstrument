@@ -2,12 +2,12 @@
 
 실행:  python -m humming.demo
 녹음:  마이크 아이콘 클릭 = 녹음 시작/정지(최대 15초)
-재생:  SPACE = 전체 재생 · S = 정지 · 음 클릭 = 그 음만 듣기
+재생:  SPACE = 전체 재생/정지 · 음 클릭 = 그 음만 듣기
 고치기: 음 위에 마우스 = 후보 3개 → 클릭 = 선택
 편집(마우스를 올린 음 기준):
-        [ / ] = 짧게 / 길게 · X = 삭제 · Z = 되돌리기
+        ↑ / ↓ = 길게 / 짧게 · X = 삭제 · Z = 되돌리기
         I = 그 음 뒤에 허밍으로 삽입 (Shift+I = 앞에) · 마우스가 띠 밖이면 맨 뒤
-        N = 그 음 뒤에 직접 골라 삽입 (Shift+N = 앞에) → , / . 로 음 선택, Enter 확정, C 취소
+        N = 그 음 뒤에 직접 골라 삽입 (Shift+N = 앞에) → ↑ / ↓ (또는 , / .) 로 음 선택, Enter 확정, C 취소
 기타:  R = 초기화 · J = 결과 json 저장 · ESC = 종료
 """
 import cv2
@@ -18,6 +18,8 @@ from .view import HummingView
 from .editor import NoteEditor
 
 WINDOW = "Virtual Instrument - Humming"
+UP_KEYS = (2490368, 65362, 82)
+DOWN_KEYS = (2621440, 65364, 84)
 
 
 def _insert_pos(view, engine, before: bool) -> int:
@@ -30,8 +32,8 @@ def _insert_pos(view, engine, before: bool) -> int:
 
 def main():
     engine = HummingEngine(min_sec=0, max_sec=15)   # 최소 제한 없음, 15초에 자동 종료
-    view = HummingView(engine)
     editor = NoteEditor(engine)
+    view = HummingView(engine, on_add_pick=editor.begin_pick)
 
     cap = cv2.VideoCapture(0)
     cv2.namedWindow(WINDOW)
@@ -49,16 +51,17 @@ def main():
         editor.draw(frame, view)             # 고르기 커서·편집 메시지 덧그리기
         cv2.imshow(WINDOW, frame)
 
-        key = cv2.waitKey(1) & 0xFF
+        raw_key = cv2.waitKeyEx(1)
+        key = raw_key & 0xFF
         if key == 27:
             break
 
         # ---- 직접 고르기 모드 중에는 이 키들만 ----
         if editor.pick_at is not None:
-            if key == ord(","):
-                editor.pick_move(-1)
-            elif key == ord("."):
-                editor.pick_move(+1)
+            if raw_key in UP_KEYS or key == ord("."):
+                editor.pick_move(+1)       # 위쪽 키로 음높이 올리기
+            elif raw_key in DOWN_KEYS or key == ord(","):
+                editor.pick_move(-1)       # 아래쪽 키로 음높이 내리기
             elif key == 13:                  # Enter
                 editor.pick_confirm()
                 view.hover = None
@@ -67,9 +70,7 @@ def main():
             continue
 
         if key == ord(" "):
-            engine.play_all()
-        elif key == ord("s"):
-            engine.stop()
+            engine.toggle_play()
         elif key == ord("r"):
             engine.reset()
             editor.undo_stack.clear()
@@ -78,10 +79,10 @@ def main():
             engine.save("recordings/last_result.json")
             engine.message = "Saved recordings/last_result.json"
         # ---- 편집 ----
-        elif key == ord("[") and view.hover is not None:
-            editor.change_duration(view.hover, longer=False)
-        elif key == ord("]") and view.hover is not None:
-            editor.change_duration(view.hover, longer=True)
+        elif raw_key in UP_KEYS and view.hover is not None:
+            editor.change_duration(view.hover, longer=True)    # 위쪽 키로 길이 늘리기
+        elif raw_key in DOWN_KEYS and view.hover is not None:
+            editor.change_duration(view.hover, longer=False)   # 아래쪽 키로 길이 줄이기
         elif key in (ord("x"), ord("X")) and view.hover is not None:
             editor.delete(view.hover)
             view.hover = None
