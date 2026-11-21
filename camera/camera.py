@@ -1,4 +1,3 @@
-
 import cv2
 
 class Camera:
@@ -12,7 +11,7 @@ class Camera:
 
     def get_frame(self):
         # 웹캠에서 한 프레임 가져오기
-        ret, frame = self.cap.read()
+        ret, frame = self.cap.read() # ret : 프레임을 정상적으로 가져왔는지 여부 frame : 실제 영상의 한 프레임
 
         if not ret:
             return None
