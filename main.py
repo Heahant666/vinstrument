@@ -43,7 +43,6 @@ def main():
             for midi in pressed_notes:
                 engine.play_note(midi)
 
-            # 현재 허밍 재생 중인 음 확인
             playing_index = engine.playing_index()
 
             if playing_index is not None:
@@ -51,7 +50,10 @@ def main():
             else:
                 midi = None
 
-            # 허밍 재생 중인 건반 표시
+            # 허밍 음에 맞춰 피아노 옥타브 자동 이동
+            piano.follow_humming_note(midi)
+
+            # 현재 재생 중인 음 하이라이트
             piano.highlight_humming_note(midi)
 
 
