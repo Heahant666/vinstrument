@@ -43,6 +43,18 @@ def main():
             for midi in pressed_notes:
                 engine.play_note(midi)
 
+            # 현재 허밍 재생 중인 음 확인
+            playing_index = engine.playing_index()
+
+            if playing_index is not None:
+                midi = engine.notes[playing_index].final_midi
+            else:
+                midi = None
+
+            # 허밍 재생 중인 건반 표시
+            piano.highlight_humming_note(midi)
+
+
             frame = piano.draw(frame)
             
 
@@ -58,6 +70,9 @@ def main():
             if key == 27:  # ESC
                 break
 
+            # 스페이스바: 허밍 음 재생 / 정지
+            if key == ord(" "):
+                engine.toggle_play()
             # TODO: humming/demo.py의 while 루프 안에 있는
             # `if key == ord(' '):` 부터 그 아래 elif 묶음 전체를 여기에 붙여넣기
             # (SPACE 재생, ] [ 길이, X 삭제, I 허밍 삽입, N 직접 삽입, , . Enter C, Z 되돌리기)

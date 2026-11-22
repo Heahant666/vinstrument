@@ -29,6 +29,8 @@ class Piano:
         # 눌린 건반의 MIDI 번호와 남은 표시 프레임을 저장
         self.highlighted_keys = {}
 
+        self.humming_highlighted_key = None
+
     # 눌린 건반을 색상으로 표시
     def highlight_notes(self, pressed_notes):
 
@@ -41,12 +43,26 @@ class Piano:
     # 건반의 색상 결정
     def get_key_color(self, midi, default_color):
 
-        # 현재 건반이 눌린 상태라면
+        # 손가락으로 누른 건반
         if midi in self.highlighted_keys:
-            return (0, 255, 255)  # 노란색 (BGR)
+            return (0, 255, 255)  # 노란색
 
-        # 눌리지 않았다면 원래 색상 반환
+        # 허밍 재생 중인 건반
+        if midi == self.humming_highlighted_key:
+            return (255, 0, 255)  # 보라색
+
+        # 눌리지 않은 건반은 원래 색상
         return default_color
+
+    # 허밍 재생 중인 음을 표시
+    def highlight_humming_note(self, midi):
+
+        # 이전에 표시하던 허밍 건반 초기화
+        self.humming_highlighted_key = None
+
+        # 현재 재생 중인 음이 있다면 저장
+        if midi is not None:
+            self.humming_highlighted_key = midi
 
     # 옥타브 이동
     def change_octave(self, direction):
