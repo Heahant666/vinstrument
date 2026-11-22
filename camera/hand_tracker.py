@@ -112,6 +112,12 @@ class HandTracker:
                     results.handedness[hand_index][0].category_name # handedness에 인식된 손의 방향 정보 저장
                 )
 
+            #좌우반전때문에 손 종류 재정의
+            if handedness == "Left":
+                handedness = "Right"
+            elif handedness == "Right":
+                handedness = "Left"
+
             # 21개 관절의 정규화 좌표를 픽셀 좌표로 변환
             points = []
 

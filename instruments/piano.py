@@ -1,10 +1,11 @@
 import cv2
+from humming.model import midi_to_name
 
 
 class Piano:
     def __init__(self):
-        self.x = 50  # 피아노를 그리기 시작할 왼쪽 첫 x좌표
-        self.y = 250  # 피아노를 그리기 시작할 왼쪽 첫 y좌표
+        self.x = 50  # 피아노를 그리기 시작할 왼쪽 첫 x좌표 (임의)
+        self.y = 150  # 피아노를 그리기 시작할 왼쪽 첫 y좌표 (임의)
         self.width = 800  # 피아노의 너비
         self.height = 200  # 피아노의 높이
 
@@ -22,8 +23,30 @@ class Piano:
         self.black_key_positions = [0, 1, 3, 4, 5]
 
         # 옥타브 이동 버튼 위치
-        self.prev_button = (50, 80, 120, 130)
-        self.next_button = (520, 80, 590, 130)
+        self.prev_button = (15, 300, 85, 350)
+        self.next_button = (555, 300, 625, 350)
+
+        # 눌린 건반의 MIDI 번호와 남은 표시 프레임을 저장
+        self.highlighted_keys = {}
+
+    # 눌린 건반을 색상으로 표시
+    def highlight_notes(self, pressed_notes):
+
+        # 이번에 눌린 모든 건반을 순회
+        for midi in pressed_notes:
+
+            # 해당 건반을 3프레임 동안 표시
+            self.highlighted_keys[midi] = 3
+
+    # 건반의 색상 결정
+    def get_key_color(self, midi, default_color):
+
+        # 현재 건반이 눌린 상태라면
+        if midi in self.highlighted_keys:
+            return (0, 255, 255)  # 노란색 (BGR)
+
+        # 눌리지 않았다면 원래 색상 반환
+        return default_color
 
     # 옥타브 이동
     def change_octave(self, direction):
@@ -55,97 +78,195 @@ class Piano:
 
         # 건반을 화면 가운데에 배치
         self.x = (w - self.width) // 2
-        self.y = int(h * 0.55)
+        self.y = int(h * 0.50)
 
         self.white_key_width = self.width / 7
         self.black_key_width = self.white_key_width * 0.6
         self.black_key_height = self.height * 0.6
 
-        # 흰 건반
-        for i in range(7):
-            x1 = int(self.x + i * self.white_key_width)  # 각 건반의 왼쪽끝 x좌표
-            x2 = int(self.x + (i + 1) * self.white_key_width)  # 각 건반의 오른쪽끝 x좌표
+        # 건반을 그리기 전 원본 프레임 복사
+        overlay = frame.copy()
 
-            # frame안에 왼쪽위, 오른쪽아래 범위에 흰색으로 색을 채움
+        # 흰 건반
+        # 흰 건반의 반음 기준 MIDI 번호
+        white_notes = [0, 2, 4, 5, 7, 9, 11]
+
+        for i in range(7):
+            x1 = int(self.x + i * self.white_key_width)
+            x2 = int(x1 + self.white_key_width)
+
+            # 현재 건반의 MIDI 번호 계산
+            midi = 12 * (self.octave + 1) + white_notes[i]
+
+            # 눌린 건반이면 노란색, 아니면 흰색
+            color = self.get_key_color(midi, (255, 255, 255))
+
             cv2.rectangle(
                 frame,
                 (x1, self.y),
                 (x2, self.y + self.height),
-                (255, 255, 255),
-                -1,
+                color,
+                -1
             )
-            # 같은 사각형의 테두리, 2픽셀
+
             cv2.rectangle(
                 frame,
                 (x1, self.y),
                 (x2, self.y + self.height),
                 (0, 0, 0),
-                2,
+                2
             )
 
         # 검은 건반
+        # 검은 건반의 위치와 MIDI 번호
+        black_notes = {
+            0: 1,   # C#
+            1: 3,   # D#
+            3: 6,   # F#
+            4: 8,   # G#
+            5: 10   # A#
+        }
+
         for i in self.black_key_positions:
-            center_x = int(self.x + (i + 1) * self.white_key_width)  # 검은 건반이 위치할 중심좌표
+            center_x = int(self.x + (i + 1) * self.white_key_width)
 
-            x1 = int(center_x - self.black_key_width / 2)  # 검은 건반 왼쪽끝
-            x2 = int(center_x + self.black_key_width / 2)  # 검은 건반 오른쪽끝
+            x1 = int(center_x - self.black_key_width / 2)
+            x2 = int(center_x + self.black_key_width / 2)
 
-            # 검은 건반 채우기
+            # 현재 검은 건반의 MIDI 번호
+            midi = 12 * (self.octave + 1) + black_notes[i]
+
+            # 눌렸으면 파란색, 아니면 검은색
+            color = (255, 0, 0) if midi in self.highlighted_keys else (20, 20, 20)
+
             cv2.rectangle(
-                frame,
+                overlay,
                 (x1, int(self.y)),
                 (x2, int(self.y + self.black_key_height)),
-                (20, 20, 20),
-                -1,
+                color,
+                -1
             )
+        # 흰 건반 테두리
+        for i in range(7):
+            x1 = int(self.x + i * self.white_key_width)
+            x2 = int(self.x + (i + 1) * self.white_key_width)
 
-        # 이전 옥타브 버튼
+            cv2.rectangle(
+                overlay,
+                (x1, self.y),
+                (x2, self.y + self.height),
+                (0, 0, 0),
+                2,
+            )
+        # 원본 프레임과 건반 이미지를 혼합
+        cv2.addWeighted(overlay, 0.35, frame, 0.65, 0, frame)
+
+        
+
+
+        # 이전 버튼
         cv2.rectangle(
             frame,
             self.prev_button[:2],
             self.prev_button[2:],
             (100, 100, 100),
-            -1,
+            -1
         )
 
         cv2.putText(
             frame,
             "<",
-            (75, 115),
+            (40, 335),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
             (255, 255, 255),
             2,
         )
 
-        # 다음 옥타브 버튼
+        # 다음 버튼
         cv2.rectangle(
             frame,
             self.next_button[:2],
             self.next_button[2:],
             (100, 100, 100),
-            -1,
+            -1
         )
 
         cv2.putText(
             frame,
             ">",
-            (545, 115),
+            (585, 335),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
             (255, 255, 255),
             2,
         )
-
+        
+        
         # 옥타브 표시
         cv2.putText(
             frame,
             f"Octave {self.octave}",
-            (250, 115),
+            (250, 235),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
             (0, 255, 0),
             2,
         )
 
+        # 건반 하이라이트 지속 시간 감소
+        for midi in list(self.highlighted_keys.keys()):
+            self.highlighted_keys[midi] -= 1
+
+            # 남은 프레임이 0이 되면 하이라이트 제거
+            if self.highlighted_keys[midi] <= 0:
+                del self.highlighted_keys[midi]
+
         return frame
+
+    
+
+    def get_key_at(self, x, y):
+        # 건반보다 위쪽 100px까지 인식
+        detection_top = self.y - 100
+
+        if not (
+            self.x <= x <= self.x + self.width
+            and detection_top <= y <= self.y + self.height
+        ):
+            return None
+            
+        # 반음계에서 각 건반의 위치
+        white_notes = [0, 2, 4, 5, 7, 9, 11]
+
+        black_notes = {
+            0: 1,  # C#
+            1: 3,  # D#
+            3: 6,  # F#
+            4: 8,  # G#
+            5: 10  # A#
+        }
+
+        # 1. 검은 건반부터 검사
+        for position, semitone in black_notes.items():
+            center_x = self.x + (position + 1) * self.white_key_width
+
+            # 화면에 그려진 검은 건반과 동일한 너비로 판정
+            hitbox_width = self.black_key_width
+
+            x1 = center_x - hitbox_width / 2
+            x2 = center_x + hitbox_width / 2
+
+            y2 = self.y + self.black_key_height
+
+            if x1 <= x <= x2 and detection_top <= y <= y2:
+                midi = 12 * (self.octave + 1) + semitone
+                return midi
+            
+        # 2. 검은 건반이 아니면 흰 건반 검사
+        index = int((x - self.x) / self.white_key_width)
+        index = min(index, 6)
+
+        midi = 12 * (self.octave + 1) + white_notes[index]
+
+        return midi

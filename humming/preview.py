@@ -10,6 +10,7 @@ import sounddevice as sd
 
 from .model import Note
 from .pitch import SR, midi_to_hz
+import threading
 
 
 def tone(midi: int, duration_ms: int, sr: int = SR) -> np.ndarray:
@@ -45,33 +46,89 @@ class TonePlayer:
         self._started_at: Optional[float] = None
         self._notes: List[Note] = []
 
+        # 현재 재생 중인 음파 데이터 목록
+        self._active_notes = []
+
+        # 여러 스레드에서 음 데이터에 접근할 때 충돌 방지
+        self._lock = threading.Lock()
+
+        # 오디오 출력 스트림을 계속 실행
+        self._stream = sd.OutputStream(
+            samplerate=self.sr,
+            channels=1,
+            callback=self._audio_callback
+        )
+        self._stream.start()
+
+    def _audio_callback(self, outdata, frames, time_info, status):
+        # 이번 출력 구간을 무음으로 초기화
+        output = np.zeros(frames, dtype=np.float32)
+
+        with self._lock:
+            remaining_notes = []
+
+            for sound, position in self._active_notes:
+
+                # 이번 프레임에서 재생할 수 있는 길이
+                available = len(sound) - position
+                length = min(frames, available)
+
+                if length > 0:
+                    output[:length] += sound[position:position + length]
+
+                # 아직 재생할 음이 남아 있다면 유지
+                position += length
+
+                if position < len(sound):
+                    remaining_notes.append((sound, position))
+
+            self._active_notes = remaining_notes
+
+        # 동시에 재생되는 음이 너무 커지지 않도록 제한
+        output = np.clip(output, -1.0, 1.0)
+
+        outdata[:, 0] = output
+
     def play_note(self, midi: int, duration_ms: int = 400) -> None:
-        sd.stop()
-        sd.play(tone(midi, duration_ms + 300, self.sr), self.sr)
+        sound = tone(midi, duration_ms + 300, self.sr)
+
+        with self._lock:
+            # 기존 음을 끊지 않고 새로운 음 추가
+            self._active_notes.append((sound, 0))
 
     def play_sequence(self, notes: List[Note]) -> None:
-        sd.stop()
+        self.stop()
         self._notes = list(notes)
         self._started_at = time.time()
         sd.play(render(notes, self.sr), self.sr)
 
     def stop(self) -> None:
+        with self._lock:
+            self._active_notes.clear()
+
         sd.stop()
         self._started_at = None
 
+    def close(self) -> None:
+        self.stop()
+        self._stream.stop()
+        self._stream.close()
+
     def current_index(self) -> Optional[int]:
-        """지금 울리고 있는 음의 번호 (화면 하이라이트용). 재생 중이 아니면 None"""
         if self._started_at is None:
             return None
+
         ms = (time.time() - self._started_at) * 1000
+
         for i, n in enumerate(self._notes):
             if n.start_ms <= ms < n.start_ms + n.duration_ms:
                 return i
+
         if self._notes and ms > self._notes[-1].start_ms + self._notes[-1].duration_ms + 800:
             self._started_at = None
+
         return None
-
-
+    
 if __name__ == "__main__":
     p = TonePlayer()
     demo = [Note(60, 60.0, 0, 400, 1.0), Note(64, 64.0, 450, 400, 1.0), Note(67, 67.0, 900, 700, 1.0)]

@@ -5,6 +5,7 @@ from instruments.piano import Piano
 from humming.engine import HummingEngine
 from humming.view import HummingView
 from humming.editor import NoteEditor
+from input.piano_input import PianoInput
 
 WINDOW = "Virtual Instrument"
 
@@ -16,6 +17,7 @@ def main():
     engine = HummingEngine(min_sec=0, max_sec=15, note_range=(60, 83))
     view = HummingView(engine)
     editor = NoteEditor(engine)
+    piano_input = PianoInput()
 
     cv2.namedWindow(WINDOW)
 
@@ -32,11 +34,17 @@ def main():
             if frame is None:
                 break
 
-            # 손 인식 (frame 위에 관절도 그려짐)
             hand_data = tracker.process(frame)
 
-            # 피아노 건반 그리기 (중복 호출 없이 한 번만 실행)
-            piano.draw(frame)
+            pressed_notes = piano_input.update(hand_data, piano)
+            piano.highlight_notes(pressed_notes)
+
+            # 눌린 건반의 MIDI 번호에 해당하는 소리 재생
+            for midi in pressed_notes:
+                engine.play_note(midi)
+
+            frame = piano.draw(frame)
+            
 
             # 허밍 UI는 건반·손 위에 그려야 하므로 둘 다 그린 뒤에 배치
             editor.update()
@@ -65,6 +73,8 @@ def main():
         camera.release()
         tracker.close()
         cv2.destroyAllWindows()
+        engine.player.close()
+        #piano_input.close()
 
 
 if __name__ == "__main__":
