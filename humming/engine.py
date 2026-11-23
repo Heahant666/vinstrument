@@ -31,19 +31,33 @@ class HummingEngine:
 
     # ---------- 녹음 ----------
     def toggle_record(self) -> None:
-        """마이크 아이콘 클릭 시 호출"""
-        if self.state == RECORDING:
+        """마이크 아이콘 클릭 시 녹음 시작/종료."""
+        # 실제 입력 스트림 상태를 기준으로 판단해 상태값과 스트림이 어긋나도 복구한다.
+        if self.recorder.is_recording:
             if self.recorder.can_stop():
                 self._finish()
             else:
-                remain = self.recorder.min_sec - self.recorder.elapsed()
-                self.message = f"Keep humming... {remain:.0f} s more (min {self.recorder.min_sec:.0f} s)"
-        else:
-            self.player.stop()
-            self.result = None
+                remain = max(0.0, self.recorder.min_sec - self.recorder.elapsed())
+                self.message = (
+                    f"Keep humming... {remain:.0f} s more "
+                    f"(min {self.recorder.min_sec:.0f} s)"
+                )
+            return
+
+        # 새 녹음 시작
+        self.player.stop()
+        self.result = None
+        self.last_audio = None
+
+        try:
             self.recorder.start()
-            self.state = RECORDING
-            self.message = "Recording... click again to stop (auto stop at 15 s)"
+        except Exception as exc:
+            self.state = READY if self.result else IDLE
+            self.message = f"Microphone error: {exc}"
+            return
+
+        self.state = RECORDING
+        self.message = "Recording... click again to stop (auto stop at 15 s)"
 
     def update(self) -> str:
         """매 프레임 호출. 15초가 되면 자동 종료"""
@@ -65,7 +79,7 @@ class HummingEngine:
 
     def reset(self) -> None:
         self.player.stop()
-        if self.state == RECORDING:
+        if self.recorder.is_recording:
             self.recorder.stop()
         self.state, self.result = IDLE, None
         self.message = "Click the mic icon and hum (max 15 s)"
@@ -105,12 +119,31 @@ class HummingEngine:
         return self.player.current_index() if hasattr(self.player, "current_index") else None
 
     def is_playing(self) -> bool:
-        return self.player.is_playing() if hasattr(self.player, "is_playing") else (self.playing_index() is not None)
+        return bool(
+            self.player.is_playing()
+            if hasattr(self.player, "is_playing")
+            else (self.playing_index() is not None)
+        )
+
+    def is_paused(self) -> bool:
+        return bool(
+            self.player.is_paused()
+            if hasattr(self.player, "is_paused")
+            else False
+        )
 
     def toggle_play(self) -> None:
-        """재생 중이면 멈추고, 아니면 처음부터 재생."""
+        """재생 중 SPACE=일시정지, 일시정지 SPACE=이어 재생, 완료 SPACE=처음부터."""
         if self.is_playing():
-            self.stop()
+            if hasattr(self.player, "pause"):
+                self.player.pause()
+            else:
+                self.stop()
+        elif self.is_paused():
+            if hasattr(self.player, "resume"):
+                self.player.resume()
+            else:
+                self.play_all()
         else:
             self.play_all()
 
@@ -122,3 +155,25 @@ class HummingEngine:
     def save(self, path: str) -> None:
         if self.result:
             self.result.save_json(path)
+
+    def set_notes_from_text(self, text: str, auto_play: bool = True, default_octave: int = 4) -> bool:
+        """텍스트 입력을 허밍 분석 완료(READY) 상태와 동일하게 반영하고 재생한다."""
+        from .text_parser import build_result_from_text
+
+        res = build_result_from_text(
+            text,
+            note_range=self.note_range,
+            default_octave=default_octave,
+            sr=self.sr,
+        )
+        if not res.notes:
+            self.message = "No valid notes. Try: 도,레,미 / 4도,도4 / C4"
+            return False
+
+        self.player.stop()
+        self.result = res
+        self.state = READY
+        self.message = f"{len(res.notes)} notes loaded. SPACE: play/stop, hover to edit"
+        if auto_play:
+            self.play_all()
+        return True

@@ -4,19 +4,20 @@ import numpy as np
 from .model import Note
 from .pitch import FrameData
 
-MIN_NOTE_MS = 80        # 이보다 짧은 음은 잡음으로 간주
-SHORT_NOTE_MS = 150     # 이보다 짧으면 "short" 표시 (확인 권장)
-BRIDGE_FRAMES = 2       # 이만큼(약 23ms)의 끊김은 같은 음으로 이어 붙임
-HYSTERESIS = 0.65       # 반음 경계(0.5)에서 떨리는 것을 막기 위한 여유 폭
-UNSTABLE_STD = 0.35     # 음 안에서 음높이 표준편차가 이보다 크면 "unstable"
-LOW_CONF = 0.75
-BORDERLINE = 0.35       # 측정값이 반음 경계(x.5)에 이만큼 가까우면 "borderline" (후보 확인 권장)
+MIN_NOTE_MS = 140       # 이보다 짧은 음은 잡음으로 간주 (기존 80 → 140)
+SHORT_NOTE_MS = 200     # 이보다 짧으면 "short" 표시 (확인 권장)
+BRIDGE_FRAMES = 6       # 약 70ms 끊김까지는 같은 음으로 이어 붙임 (기존 2 → 6)
+HYSTERESIS = 0.95       # 반음 경계/미세 떨림에서 음이 쪼개지는 것을 방지 (기존 0.65 → 0.95)
+UNSTABLE_STD = 0.45     # 음 안에서 음높이 표준편차가 이보다 크면 "unstable"
+LOW_CONF = 0.70
+BORDERLINE = 0.35       # 측정값이 반음 경계(x.5)에 이만큼 가까우면 "borderline"
 
 
 def _split_by_dips(run: List[int], rms: np.ndarray, min_frames: int,
-                   dip_ratio: float = 0.55, rise_ratio: float = 1.6) -> List[List[int]]:
-    """같은 음이 이어진 구간 안에서 음량이 푹 꺼졌다가 다시 커지면 '도-도'처럼 두 음으로 나눈다."""
+                   dip_ratio: float = 0.35, rise_ratio: float = 2.2) -> List[List[int]]:
+    """같은 음이 이어진 구간 안에서 음량이 크게 꺼졌다가 확실히 다시 커질 때만 두 음으로 나눈다."""
     r = rms[run]
+    effective_min = max(min_frames, 8)
     parts, start, peak, i = [], 0, r[0], 1
     while i < len(r):
         peak = max(peak, r[i])
@@ -27,7 +28,11 @@ def _split_by_dips(run: List[int], rms: np.ndarray, min_frames: int,
             k = j
             while k + 1 < len(r) and r[k + 1] >= r[k]:
                 k += 1                          # 다시 올라가는 곳까지
-            if r[k] > r[j] * rise_ratio and (j - start) >= min_frames and (len(r) - k) >= min_frames:
+            if (
+                r[k] > r[j] * rise_ratio
+                and (j - start) >= effective_min
+                and (len(r) - k) >= effective_min
+            ):
                 parts.append(run[start : j + 1])
                 start, peak = j + 1, r[k]
             i = max(k, i) + 1
@@ -56,7 +61,7 @@ def segment(fd: FrameData, split_repeats: bool = True) -> List[Note]:
                 dropped.append((start, end, float(np.nanmedian(vals))))
                 continue
             mf = float(np.nanmedian(vals))
-            midi_final = int(round(mf))            # 첫 프레임이 아니라 구간 전체의 중앙값으로 결정
+            midi_final = int(round(mf))
             flags = []
             if abs(mf - midi_final) > BORDERLINE:
                 flags.append("borderline")

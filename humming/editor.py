@@ -19,7 +19,7 @@ except ImportError:                     # 상수 이름이 다르면 문자열�
 
 GAP_MS = 80            # 삽입한 음 앞뒤에 두는 간격
 MIN_DUR_MS = 80
-MAX_DUR_MS = 4000
+MAX_DUR_MS = None
 STEP = 1.25            # 길이 조절 배율: ] 는 ×1.25, [ 는 ÷1.25
 UNDO_LIMIT = 30
 
@@ -83,8 +83,13 @@ class NoteEditor:
         if not self._ready() or not (0 <= idx < len(self.notes)):
             return False
         n = self.notes[idx]
-        new = int(round(n.duration_ms * (STEP if longer else 1 / STEP)))
-        new = max(MIN_DUR_MS, min(MAX_DUR_MS, new))
+        raw_new = n.duration_ms * (STEP if longer else 1 / STEP)
+        new = int(round(raw_new))
+        if longer:
+            if MAX_DUR_MS is not None:
+                new = min(MAX_DUR_MS, new)
+        else:
+            new = max(MIN_DUR_MS, new)
         if new == n.duration_ms:
             return False
         self._push()
@@ -93,7 +98,7 @@ class NoteEditor:
         self._shift(idx + 1, delta)
         self.message = f"#{idx + 1} {n.name} {new} ms"
         return True
-
+    
     # ---------- 삭제 ----------
     def delete(self, idx: int) -> bool:
         if not self._ready() or not (0 <= idx < len(self.notes)):
