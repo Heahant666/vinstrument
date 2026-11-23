@@ -36,8 +36,10 @@ def main():
 
             hand_data = tracker.process(frame)
 
-            pressed_notes = piano_input.update(hand_data, piano)
-            piano.highlight_notes(pressed_notes)
+            # 슬라이드 중에는 손가락 입력 차단
+            if not piano.animation.is_sliding:
+                pressed_notes = piano_input.update(hand_data, piano)
+                piano.highlight_notes(pressed_notes)
 
             # 눌린 건반의 MIDI 번호에 해당하는 소리 재생
             for midi in pressed_notes:
@@ -57,6 +59,7 @@ def main():
             piano.highlight_humming_note(midi)
 
 
+
             frame = piano.draw(frame)
             
 
@@ -67,14 +70,21 @@ def main():
 
             cv2.imshow(WINDOW, frame)
 
-            # waitKey는 루프당 한 번만 호출해야 키 입력이 씹히지 않음
-            key = cv2.waitKey(1) & 0xFF
-            if key == 27:  # ESC
+            key = cv2.waitKeyEx(1)
+
+            if key == 27:
                 break
 
-            # 스페이스바: 허밍 음 재생 / 정지
-            if key == ord(" "):
+            elif key == ord(" "):
                 engine.toggle_play()
+
+            # 오른쪽 방향키
+            elif key == 2555904:
+                piano.start_slide(1)
+
+            # 왼쪽 방향키
+            elif key == 2424832:
+                piano.start_slide(-1)
             # TODO: humming/demo.py의 while 루프 안에 있는
             # `if key == ord(' '):` 부터 그 아래 elif 묶음 전체를 여기에 붙여넣기
             # (SPACE 재생, ] [ 길이, X 삭제, I 허밍 삽입, N 직접 삽입, , . Enter C, Z 되돌리기)
