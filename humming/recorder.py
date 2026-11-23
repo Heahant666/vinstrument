@@ -30,7 +30,7 @@ class Recorder:
         return self._stream is not None
 
     def elapsed(self) -> float:
-        return 0.0 if self._t0 is None else time.time() - self._t0
+        return 0.0 if self._t0 is None else time.monotonic() - self._t0
 
     def can_stop(self) -> bool:
         return self.elapsed() >= self.min_sec
@@ -46,11 +46,31 @@ class Recorder:
     def start(self) -> None:
         if self.is_recording:
             return
+
         self._chunks = []
-        self._t0 = time.time()
-        self._stream = sd.InputStream(samplerate=self.sr, channels=1, dtype="float32",
-                                      blocksize=1024, callback=self._callback)
-        self._stream.start()
+        self._level = 0.0
+        self._t0 = time.monotonic()
+
+        stream = None
+        try:
+            stream = sd.InputStream(
+                samplerate=self.sr,
+                channels=1,
+                dtype="float32",
+                blocksize=1024,
+                callback=self._callback,
+            )
+            stream.start()
+            self._stream = stream
+        except Exception:
+            self._t0 = None
+            self._stream = None
+            if stream is not None:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+            raise
 
     def _callback(self, indata, frames, time_info, status):
         mono = indata[:, 0].copy()
@@ -59,14 +79,26 @@ class Recorder:
         self._level = float(min(1.0, np.abs(mono).max() * 3))
 
     def stop(self) -> np.ndarray:
-        """녹음을 끝내고 전체 소리를 float32 배열로 돌려준다 (최대 max_sec까지 자름)."""
-        if not self.is_recording:
+        """녹음을 끝내고 전체 소리를 float32 배열로 돌려준다."""
+        stream = self._stream
+        if stream is None:
             return np.zeros(0, dtype=np.float32)
-        self._stream.stop()
-        self._stream.close()
-        self._stream = None
+
+        try:
+            stream.stop()
+        finally:
+            try:
+                stream.close()
+            finally:
+                self._stream = None
+
         with self._lock:
-            y = np.concatenate(self._chunks) if self._chunks else np.zeros(0, dtype=np.float32)
+            y = (
+                np.concatenate(self._chunks)
+                if self._chunks
+                else np.zeros(0, dtype=np.float32)
+            )
+
         self._t0 = None
         return y[: int(self.max_sec * self.sr)]
 
