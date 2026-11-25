@@ -6,6 +6,8 @@ from humming.engine import HummingEngine
 from humming.view import HummingView
 from humming.editor import NoteEditor
 from input.piano_input import PianoInput
+from audio.piano_player import PianoPlayer
+import numpy as np
 
 WINDOW = "Virtual Instrument"
 
@@ -14,6 +16,50 @@ LEFT_KEYS = (2424832, 65361)
 UP_KEYS = (2490368, 65362)
 RIGHT_KEYS = (2555904, 65363)
 DOWN_KEYS = (2621440, 65364)
+
+def select_instrument():
+
+    window = "Select Instrument"
+
+    while True:
+        frame = np.zeros((400, 700, 3), dtype=np.uint8)
+
+        cv2.putText(
+            frame, "SELECT INSTRUMENT",
+            (180, 100),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1, (255, 255, 255), 2
+        )
+
+        cv2.putText(
+            frame, "1. Piano",
+            (250, 200),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1, (255, 255, 255), 2
+        )
+
+        cv2.putText(
+            frame, "2. Harp",
+            (250, 270),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1, (255, 255, 255), 2
+        )
+
+        cv2.imshow(window, frame)
+
+        key = cv2.waitKey(1) & 0xFF
+
+        if key == ord("1"):
+            cv2.destroyWindow(window)
+            return "piano"
+
+        elif key == ord("2"):
+            cv2.destroyWindow(window)
+            return "harp"
+
+        elif key == ord("q"):
+            cv2.destroyAllWindows()
+            return None
 
 
 def insert_pos(view, engine, before):
@@ -25,13 +71,31 @@ def insert_pos(view, engine, before):
 
 
 def main():
+
+    # 악기 선택
+    selected_instrument = select_instrument()
+
+    # 종료 선택 시 프로그램 종료
+    if selected_instrument is None:
+        return
+    
     camera = Camera()
     tracker = HandTracker()
     piano = Piano()
     piano_input = PianoInput()
 
+    #고른 악기에 따른 player설정
+    if selected_instrument == "piano" :
+        player = PianoPlayer() 
+    if selected_instrument == "harp":
+        print("하프가 선택됨")
+        player = PianoPlayer() #하프 구현전까지 임시
+
+    
     # ★ 허밍 후보·텍스트 입력 범위를 건반이 보여 줄 수 있는 범위와 같게 맞춘다
-    engine = HummingEngine(min_sec=0, max_sec=15, note_range=(MIN_MIDI, MAX_MIDI))
+    #사용자가 지정한 player를 engine에 전달
+    engine = HummingEngine(player=player, min_sec=0, max_sec=15, note_range=(MIN_MIDI, MAX_MIDI)) 
+    print("[DEBUG] Engine에 연결된 플레이어:", type(engine.player).__name__)
     editor = NoteEditor(engine)
     view = HummingView(engine, on_add_pick=editor.begin_pick)   # ★ '+' 버튼이 동작하려면 필요
 
@@ -52,28 +116,59 @@ def main():
 
             hand_data = tracker.process(frame)
 
-            # ---- 자유 연주: 손가락 누름 → 소리 ----
-            pressed_notes = []
-            if not piano.animation.is_sliding:
-                pressed_notes = piano_input.update(hand_data, piano)
-                piano.highlight_notes(pressed_notes)
+            #선택한 악기에 따라 다른 소리재생 및 ui표시
+            if selected_instrument == "piano":
 
-            for midi in pressed_notes:
-                engine.play_note(midi)
+                # ---- 자유 연주: 손가락 누름 → 소리 ----
+                pressed_notes = []
+                if not piano.animation.is_sliding:
+                    pressed_notes = piano_input.update(hand_data, piano)
+                    piano.highlight_notes(pressed_notes)
 
-            playing_index = engine.playing_index()
-            if playing_index is not None:
-                notes = engine.notes
-                midi = notes[playing_index].final_midi
-                upcoming = [n.final_midi for n in notes[playing_index + 1 : playing_index + 7]]
+                for midi in pressed_notes:
+                    player.play_note(midi)
+
+                # ---- 허밍 재생시 악기 위에 하이라이트 표시 ---- # 
+
+                playing_index = engine.playing_index()
+                if playing_index is not None:
+                    notes = engine.notes
+                    midi = notes[playing_index].final_midi
+                    upcoming = [n.final_midi for n in notes[playing_index + 1 : playing_index + 7]]
+                else:
+                    midi, upcoming = None, []
+
+                piano.follow_humming_note(midi, upcoming)
+                piano.highlight_humming_note(midi)
+
+
+                frame = piano.draw(frame)
             else:
-                midi, upcoming = None, []
+                print("하프ui 출력")
+                # ---- 자유 연주: 손가락 누름 → 소리 ----
+                pressed_notes = []
+                if not piano.animation.is_sliding:
+                    pressed_notes = piano_input.update(hand_data, piano)
+                    piano.highlight_notes(pressed_notes)
 
-            piano.follow_humming_note(midi, upcoming)
-            piano.highlight_humming_note(midi)
+                for midi in pressed_notes:
+                    player.play_note(midi)
+
+                # ---- 허밍 재생시 악기 위에 하이라이트 표시 ---- # 
+
+                playing_index = engine.playing_index()
+                if playing_index is not None:
+                    notes = engine.notes
+                    midi = notes[playing_index].final_midi
+                    upcoming = [n.final_midi for n in notes[playing_index + 1 : playing_index + 7]]
+                else:
+                    midi, upcoming = None, []
+
+                piano.follow_humming_note(midi, upcoming)
+                piano.highlight_humming_note(midi)
 
 
-            frame = piano.draw(frame)
+                frame = piano.draw(frame)
 
             # 허밍 UI는 건반·손 위에 그려야 하므로 둘 다 그린 뒤에
             editor.update()
@@ -140,7 +235,9 @@ def main():
         engine.player.close()
         camera.release()
         tracker.close()
+        player.close()
         cv2.destroyAllWindows()
+
 
 
 if __name__ == "__main__":
