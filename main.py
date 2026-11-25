@@ -6,6 +6,7 @@ from humming.engine import HummingEngine
 from humming.view import HummingView
 from humming.editor import NoteEditor
 from input.piano_input import PianoInput
+from audio.piano_player import PianoPlayer
 
 WINDOW = "Virtual Instrument"
 
@@ -29,6 +30,7 @@ def main():
     tracker = HandTracker()
     piano = Piano()
     piano_input = PianoInput()
+    player = PianoPlayer()
 
     # ★ 허밍 후보·텍스트 입력 범위를 건반이 보여 줄 수 있는 범위와 같게 맞춘다
     engine = HummingEngine(min_sec=0, max_sec=15, note_range=(MIN_MIDI, MAX_MIDI))
@@ -59,7 +61,7 @@ def main():
                 piano.highlight_notes(pressed_notes)
 
             for midi in pressed_notes:
-                engine.play_note(midi)
+                player.play_note(midi)
 
             playing_index = engine.playing_index()
             if playing_index is not None:
@@ -140,7 +142,9 @@ def main():
         engine.player.close()
         camera.release()
         tracker.close()
+        player.close()
         cv2.destroyAllWindows()
+
 
 
 if __name__ == "__main__":
