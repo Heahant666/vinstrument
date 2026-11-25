@@ -40,36 +40,129 @@ def render(notes: List[Note], sr: int = SR) -> np.ndarray:
 
 
 class TonePlayer:
+    """합성음 재생기. 전체 재생은 일시정지/이어 재생을 지원한다."""
+
     def __init__(self, sr: int = SR):
         self.sr = sr
-        self._started_at: Optional[float] = None
         self._notes: List[Note] = []
+        self._audio = np.zeros(0, dtype=np.float32)
+        self._started_at: Optional[float] = None
+        self._position_frames = 0
+        self._paused = False
+
+    def _refresh_position(self) -> int:
+        """재생 경과 시간을 샘플 프레임 위치로 갱신한다."""
+        if self._started_at is None:
+            return self._position_frames
+
+        elapsed = max(0.0, time.monotonic() - self._started_at)
+        position = self._position_frames + int(elapsed * self.sr)
+
+        # 버퍼 재생이 끝났으면 다음 SPACE 입력이 처음부터 시작하도록 초기화
+        if position >= len(self._audio):
+            self._started_at = None
+            self._position_frames = 0
+            self._paused = False
+            return 0
+
+        return position
+
+    def _start_from_saved_position(self) -> None:
+        if self._audio.size == 0:
+            self._paused = False
+            self._position_frames = 0
+            return
+
+        self._position_frames = min(
+            max(0, self._position_frames), len(self._audio)
+        )
+        remaining = self._audio[self._position_frames:]
+        if remaining.size == 0:
+            self._position_frames = 0
+            self._paused = False
+            return
+
+        sd.play(remaining, self.sr)
+        self._started_at = time.monotonic()
+        self._paused = False
 
     def play_note(self, midi: int, duration_ms: int = 400) -> None:
-        sd.stop()
+        """음표 하나 미리듣기. 진행 중인 전체 재생은 종료한다."""
+        self.stop()
         sd.play(tone(midi, duration_ms + 300, self.sr), self.sr)
 
     def play_sequence(self, notes: List[Note]) -> None:
-        sd.stop()
-        self._notes = list(notes)
-        self._started_at = time.time()
-        sd.play(render(notes, self.sr), self.sr)
+        """전체 음을 처음부터 재생한다."""
+        self.stop()
+        if not notes:
+            return
 
-    def stop(self) -> None:
+        self._notes = list(notes)
+        self._audio = render(self._notes, self.sr)
+        self._position_frames = 0
+        self._start_from_saved_position()
+
+    def pause(self) -> None:
+        """현재 재생 위치를 저장한 뒤 일시정지한다."""
+        if self._started_at is None:
+            return
+
+        position = self._refresh_position()
+        if self._started_at is None:
+            # pause를 누른 순간 이미 재생이 끝난 경우
+            return
+
+        self._position_frames = position
         sd.stop()
         self._started_at = None
+        self._paused = True
+
+    def resume(self) -> None:
+        """일시정지했던 위치부터 이어서 재생한다."""
+        if not self._paused:
+            return
+        self._start_from_saved_position()
+
+    def stop(self) -> None:
+        """재생을 완전히 정지하고 다음 재생 위치를 처음으로 되돌린다."""
+        sd.stop()
+        self._started_at = None
+        self._position_frames = 0
+        self._paused = False
+        self._audio = np.zeros(0, dtype=np.float32)
+        self._notes = []
+
+    def is_playing(self) -> bool:
+        """음과 음 사이의 무음 구간도 재생 중으로 판정한다."""
+        self._refresh_position()
+        return self._started_at is not None
+
+    def is_paused(self) -> bool:
+        self._refresh_position()
+        return self._paused
 
     def current_index(self) -> Optional[int]:
-        """지금 울리고 있는 음의 번호 (화면 하이라이트용). 재생 중이 아니면 None"""
-        if self._started_at is None:
+        """현재 재생 위치에 해당하는 음표 인덱스. 무음/정지 구간이면 None."""
+        if not self._notes:
             return None
-        ms = (time.time() - self._started_at) * 1000
-        for i, n in enumerate(self._notes):
-            if n.start_ms <= ms < n.start_ms + n.duration_ms:
+        if self._started_at is None and not self._paused:
+            return None
+
+        position = self._refresh_position()
+        ms = position * 1000.0 / self.sr
+
+        for i, note in enumerate(self._notes):
+            if note.start_ms <= ms < note.start_ms + note.duration_ms:
                 return i
-        if self._notes and ms > self._notes[-1].start_ms + self._notes[-1].duration_ms + 800:
-            self._started_at = None
         return None
+
+    def close(self):
+        """프로그램 종료 시 호출. 재생 중인 소리를 멈춘다."""
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
