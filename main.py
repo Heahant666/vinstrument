@@ -30,10 +30,11 @@ def main():
     tracker = HandTracker()
     piano = Piano()
     piano_input = PianoInput()
-    player = PianoPlayer()
+    player = PianoPlayer() #하프 추가시 사용자의 입력에따라 player = HarpPlayer()로도 정의 할수 있음
 
     # ★ 허밍 후보·텍스트 입력 범위를 건반이 보여 줄 수 있는 범위와 같게 맞춘다
-    engine = HummingEngine(min_sec=0, max_sec=15, note_range=(MIN_MIDI, MAX_MIDI))
+    engine = HummingEngine(player=player, min_sec=0, max_sec=15, note_range=(MIN_MIDI, MAX_MIDI)) #사용자가 지정한 player를 engine에 전달
+    print("[DEBUG] Engine에 연결된 플레이어:", type(engine.player).__name__)
     editor = NoteEditor(engine)
     view = HummingView(engine, on_add_pick=editor.begin_pick)   # ★ '+' 버튼이 동작하려면 필요
 
@@ -62,6 +63,8 @@ def main():
 
             for midi in pressed_notes:
                 player.play_note(midi)
+
+            # ---- 허밍 재생시 악기 위에 하이라이트 표시 ---- # 
 
             playing_index = engine.playing_index()
             if playing_index is not None:
