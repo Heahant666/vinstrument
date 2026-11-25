@@ -156,6 +156,15 @@ class TonePlayer:
                 return i
         return None
 
+    def close(self):
+        """프로그램 종료 시 호출. 재생 중인 소리를 멈춘다."""
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception:
+            pass
+
+
 if __name__ == "__main__":
     p = TonePlayer()
     demo = [Note(60, 60.0, 0, 400, 1.0), Note(64, 64.0, 450, 400, 1.0), Note(67, 67.0, 900, 700, 1.0)]
