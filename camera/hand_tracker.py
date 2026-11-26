@@ -170,6 +170,9 @@ class HandTracker:
                 # 기존 손가락 끝 좌표도 유지
                 landmark_id = self.finger_tips[finger_name]
 
+                # 현재 손가락 끝 좌표 가져오기
+                x, y = points[landmark_id]
+
                 fingers[finger_name] = {
                     "pixel": points[landmark_id],
                     "normalized": (
@@ -199,6 +202,7 @@ class HandTracker:
             # 한 손의 데이터 구성
             one_hand = {
                 "handedness": handedness,
+                "wrist": points[0],
                 "fingers": fingers
             }
 

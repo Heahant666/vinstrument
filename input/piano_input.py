@@ -30,7 +30,8 @@ class PianoInput:
                 x, y = finger_data["pixel"]
 
                 # 현재 손의 손목 좌표
-                wrist_x, wrist_y = hand["fingers"]["index"]["joints"][0]["pixel"]
+                wrist_x, wrist_y = hand["wrist"]
+
                 # 손목을 기준으로 한 손가락 끝의 상대 위치
                 relative_y = y - wrist_y
                 finger_id = (handedness, finger_name)
@@ -140,14 +141,14 @@ class PianoInput:
                         data.update({
                             "state": "ready",
                             "start_x": x,
-                            "start_y": y,
-                            "bottom_y": y,
+                            "start_y": relative_y,
+                            "bottom_y": relative_y,
                             "down_count": 0,
                             "up_count": 0
                         })
 
                 # 다음 프레임과 비교하기 위해 현재 Y좌표 저장
-                data["last_y"] = y
+                data["last_y"] = relative_y
 
         # 현재 프레임에서 사라진 손가락 제거
         for finger_id in list(self.finger_states):
