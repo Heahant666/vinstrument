@@ -138,6 +138,9 @@ class Harp:
         self._side_vote = None
         self._side_vote_t0 = self._side_changed_at
         self.side_button = None
+        # 하프 위치 고정 상태
+        self.is_position_locked = False
+        self.lock_button = None
 
         # 허밍·하이라이트
         self.humming_highlighted_key: Optional[int] = None
@@ -189,9 +192,17 @@ class Harp:
 
     def handle_mouse(self, event, x, y, flags, param) -> None:
         if event == cv2.EVENT_LBUTTONDOWN:
+
+            # 좌우 배치 버튼
             b = getattr(self, "side_button", None)
             if b and b[0] <= x <= b[2] and b[1] <= y <= b[3]:
                 self.cycle_side_mode()
+                return
+
+            # 위치 고정 버튼
+            b = getattr(self, "lock_button", None)
+            if b and b[0] <= x <= b[2] and b[1] <= y <= b[3]:
+                self.toggle_position_lock()
 
     def get_key_at(self, x, y) -> Optional[int]:
         """손끝이 어느 현에 가장 가까운지(12px 안). 피아노의 get_key_at 대응"""
@@ -241,6 +252,11 @@ class Harp:
             self._set_side(self.side_mode)
         self._side_vote = None
 
+    def toggle_position_lock(self):
+        """현재 하프 위치 고정/해제"""
+        self.is_position_locked = not self.is_position_locked
+        self._side_vote = None
+
     def update_side(self, user_x, frame_width: Optional[int] = None) -> None:
         """
         매 프레임 호출.
@@ -249,6 +265,9 @@ class Harp:
         사용자가 왼쪽에 있으면 하프는 오른쪽, 오른쪽에 있으면 왼쪽에 둔다.
         """
         now = time.perf_counter()
+        # 위치 고정 상태에서는 자동 배치 중지
+        if self.is_position_locked:
+            return
 
         # 이전 버전 호출부: update_side(hand_data, frame_width)
         if not isinstance(user_x, (int, float)):
@@ -341,6 +360,36 @@ class Harp:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 200, 255), 1,
                     cv2.LINE_AA)
 
+    def _draw_lock_button(self, frame):
+        """하프 위치 고정 버튼"""
+        h, w = frame.shape[:2]
+
+        size = 36
+        x, y = w - 20 - size, h - 54
+
+        self.lock_button = (x, y, x + size, y + size)
+
+        color = (0, 200, 255) if self.is_position_locked else (160, 160, 160)
+
+        cv2.rectangle(
+            frame, (x, y), (x + size, y + size),
+            (40, 40, 40), -1
+        )
+
+        cv2.rectangle(
+            frame, (x, y), (x + size, y + size),
+            color, 2
+            )
+
+        label = "LOCK" if self.is_position_locked else "FREE"
+
+        cv2.putText(
+            frame, label,
+            (x + 2, y + 23),
+            cv2.FONT_HERSHEY_SIMPLEX,
+         0.35, color, 1, cv2.LINE_AA
+        )
+
     # ---------- 배치 계산 ----------
     def layout(self, w: int, h: int) -> None:
         """현의 양 끝 좌표를 프레임 크기와 좌/우 쪽에 맞춰 계산한다. draw()가 매 프레임 호출."""
@@ -409,6 +458,7 @@ class Harp:
                     (self.strings[-1].top[0] - 60 if self.screen_side == "right" else 30, int(h * 0.22) - 12),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2, cv2.LINE_AA)
         self._draw_side_button(frame)
+        self._draw_lock_button(frame)
 
         return frame
 
