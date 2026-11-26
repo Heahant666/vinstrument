@@ -69,15 +69,57 @@ def insert_pos(view, engine, before):
         return total
     return view.hover if before else view.hover + 1
 
+def draw_exit_button(frame):
+    """화면 오른쪽 위에 Exit 버튼 표시"""
+
+    h, w, _ = frame.shape
+
+    # 버튼 위치와 크기
+    x1 = w - 120
+    y1 = 20
+    x2 = w - 20
+    y2 = 60
+
+    # 버튼 배경
+    cv2.rectangle(
+        frame,
+        (x1, y1),
+        (x2, y2),
+        (50, 50, 180),
+        -1
+    )
+
+    # 버튼 테두리
+    cv2.rectangle(
+        frame,
+        (x1, y1),
+        (x2, y2),
+        (255, 255, 255),
+        2
+    )
+
+    # 버튼 글자
+    cv2.putText(
+        frame,
+        "EXIT",
+        (x1 + 20, y1 + 27),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2
+    )
+
+    return (x1, y1, x2, y2)
+
 
 def main():
 
     # 악기 선택
     selected_instrument = select_instrument()
 
-    # 종료 선택 시 프로그램 종료
     if selected_instrument is None:
-        return
+        return False
+
     
     camera = Camera()
     tracker = HandTracker()
@@ -104,12 +146,23 @@ def main():
         on_undo=editor.undo,
     )
 
+    exit_button_bounds = (0, 0, 0, 0)
     cv2.namedWindow(WINDOW)
 
     # 마우스 콜백은 창마다 하나뿐 → 허밍과 피아노 둘에게 넘겨 주는 함수로 묶는다
+    exit_clicked = False
+
     def on_mouse(event, x, y, flags, param):
+        nonlocal exit_clicked
+
         view._on_mouse(event, x, y, flags, param)
         piano.handle_mouse(event, x, y, flags, param)
+
+        if event == cv2.EVENT_LBUTTONDOWN:
+            x1, y1, x2, y2 = exit_button_bounds
+
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                exit_clicked = True
 
     cv2.setMouseCallback(WINDOW, on_mouse)
 
@@ -179,9 +232,16 @@ def main():
             editor.update()
             view.draw(frame)
             editor.draw(frame, view)
+            exit_button_bounds = draw_exit_button(frame)
             cv2.imshow(WINDOW, frame)
+            
 
             raw_key = cv2.waitKeyEx(1)
+
+            # EXIT 버튼 클릭 확인
+            if exit_clicked:
+                exit_clicked = False
+                break
             if raw_key == -1:                       # 눌린 키 없음
                 continue
             key = raw_key & 0xFF
@@ -243,7 +303,10 @@ def main():
         player.close()
         cv2.destroyAllWindows()
 
+    return True
+
 
 
 if __name__ == "__main__":
-    main()
+    while main():
+        pass
