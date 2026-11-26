@@ -97,7 +97,12 @@ def main():
     engine = HummingEngine(player=player, min_sec=0, max_sec=15, note_range=(MIN_MIDI, MAX_MIDI)) 
     print("[DEBUG] Engine에 연결된 플레이어:", type(engine.player).__name__)
     editor = NoteEditor(engine)
-    view = HummingView(engine, on_add_pick=editor.begin_pick)   # ★ '+' 버튼이 동작하려면 필요
+    view = HummingView(
+        engine,
+        on_add_pick=editor.begin_pick,
+        on_delete=editor.delete,
+        on_undo=editor.undo,
+    )
 
     cv2.namedWindow(WINDOW)
 

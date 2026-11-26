@@ -35,10 +35,14 @@ class HummingView:
         engine: HummingEngine,
         on_add_pick: Optional[Callable[[int], None]] = None,
         on_text_input: Optional[Callable[[str], None]] = None,
+        on_delete: Optional[Callable[[int], None]] = None,
+        on_undo: Optional[Callable[[], None]] = None,
     ):
         self.engine = engine
         self.on_add_pick = on_add_pick
         self.on_text_input = on_text_input
+        self.on_delete = on_delete
+        self.on_undo = on_undo
 
         self.mouse = (-1, -1)
 
@@ -64,6 +68,8 @@ class HummingView:
         self.text_icon_rect: Rect = (0, 0, 0, 0)
         self.add_end_rect: Rect = (0, 0, 0, 0)
         self.add_after_rect: Rect = (0, 0, 0, 0)
+        self.delete_rect: Rect = (0, 0, 0, 0)
+        self.undo_rect: Rect = (0, 0, 0, 0)
 
         self.left_arrow_rect: Rect = (0, 0, 0, 0)
         self.right_arrow_rect: Rect = (0, 0, 0, 0)
@@ -178,6 +184,9 @@ class HummingView:
 
         if self.engine.state == READY:
             self._draw_notes(frame, w)
+
+        # 음표와 '+' 버튼을 모두 그린 뒤 편집 버튼을 가장 위에 그린다.
+        self._draw_edit_buttons(frame, w, h)
 
         msg_x = 122 if self.engine.state != RECORDING else 70
         cv2.putText(
@@ -533,6 +542,41 @@ class HummingView:
             0.0,
             min(self.scroll_offset, self.max_scroll),
         )
+        # ----------------------------------------
+        # 재생 중인 음표를 따라가는 자동 타임라인
+        # ----------------------------------------
+
+        if playing is not None and 0 <= playing < len(notes):
+
+            current_note = notes[playing]
+
+            # 현재 재생 음표의 화면상 중심 위치 계산
+            note_center = (
+                current_note.start_ms * self.pixels_per_ms
+                + self._calc_note_width(current_note.duration_ms) / 2
+            )
+
+            # 현재 음표를 화면 너비의 약 55% 지점에 배치
+            target_scroll = (
+                note_center - self._viewport_width * 0.55
+            )
+
+            # 타임라인 이동 가능 범위 제한
+            target_scroll = max(
+                0.0,
+                min(target_scroll, self.max_scroll),
+            )
+
+            # 한 번에 튀지 않도록 부드럽게 이동
+            smooth_speed = 0.18
+
+            self.scroll_offset += (
+                target_scroll - self.scroll_offset
+            ) * smooth_speed
+
+            # 아주 작은 오차는 제거
+            if abs(target_scroll - self.scroll_offset) < 0.5:
+                self.scroll_offset = target_scroll
 
         # 화살표를 보여줄 조건
         strip_zone = (
@@ -619,8 +663,15 @@ class HummingView:
             )
         )
 
+        # 휴지통 위에 마우스가 있어도 원래 음표의 hover를 유지
+        on_delete_btn = (
+            self.hover is not None
+            and self.hover in self._visible_indices
+            and _inside(self.delete_rect, *self.mouse)
+        )
+
         if new_hover is None and (
-            on_popup or on_after_btn
+            on_popup or on_after_btn or on_delete_btn
         ):
             new_hover = self.hover
 
@@ -928,6 +979,21 @@ class HummingView:
         if self.engine.state != READY:
             return
 
+        # 휴지통 아이콘 클릭
+        if _inside(self.delete_rect, x, y):
+            if self.hover is not None and callable(self.on_delete):
+                delete_index = self.hover
+                self.hover = None
+                self.on_delete(delete_index)
+            return
+
+        # 실행 취소 아이콘 클릭
+        if _inside(self.undo_rect, x, y):
+            if self.on_undo:
+                self.on_undo()
+                self.hover = None
+            return
+
         # 왼쪽 화살표
         if _inside(self.left_arrow_rect, x, y):
             self.scroll_offset = max(
@@ -993,3 +1059,116 @@ class HummingView:
                 )
 
                 return
+    def _draw_edit_buttons(self, frame, w, h):
+        # --------------------------------
+        # 휴지통: 호버한 음표의 '+' 버튼 바로 아래
+        # 기존 '+' 버튼과 같은 크기와 색상 사용
+        # --------------------------------
+        self.delete_rect = (0, 0, 0, 0)
+
+        if (
+            self.engine.state == READY
+            and self.hover is not None
+            and self.hover in self._visible_indices
+            and self.add_after_rect[2] > 0
+        ):
+            plus = self.add_after_rect
+
+            # '+' 버튼과 같은 22x22 크기, 바로 아래에 배치
+            size_w = plus[2]
+            size_h = plus[3]
+            x = plus[0]
+            y = plus[1] + plus[3] + 3
+
+            self.delete_rect = (x, y, size_w, size_h)
+
+            hovered = _inside(self.delete_rect, *self.mouse)
+
+            # _draw_plus_box()와 동일한 배경색/테두리 규칙
+            fill = BLUE if hovered else (70, 70, 70)
+            border = WHITE if hovered else GRAY
+
+            cv2.rectangle(
+                frame,
+                (x, y),
+                (x + size_w - 1, y + size_h - 1),
+                fill,
+                -1,
+            )
+            cv2.rectangle(
+                frame,
+                (x, y),
+                (x + size_w - 1, y + size_h - 1),
+                border,
+                1,
+            )
+
+            # 작은 휴지통 선 아이콘
+            icon_color = WHITE
+            cx = x + size_w // 2
+            top = y + 5
+            left = cx - 4
+            right = cx + 4
+
+            cv2.line(
+                frame, (left - 2, top + 1), (right + 2, top + 1),
+                icon_color, 1, cv2.LINE_AA
+            )
+            cv2.line(
+                frame, (cx - 2, top - 1), (cx + 2, top - 1),
+                icon_color, 1, cv2.LINE_AA
+            )
+            cv2.line(
+                frame, (left, top + 3), (left + 1, y + size_h - 5),
+                icon_color, 1, cv2.LINE_AA
+            )
+            cv2.line(
+                frame, (right, top + 3), (right - 1, y + size_h - 5),
+                icon_color, 1, cv2.LINE_AA
+            )
+            cv2.line(
+                frame,
+                (left + 1, y + size_h - 5),
+                (right - 1, y + size_h - 5),
+                icon_color, 1, cv2.LINE_AA
+            )
+
+        # --------------------------------
+        # 되돌리기: 기존처럼 화면 오른쪽 아래 고정
+        # --------------------------------
+        size = 36
+        x = w - 20 - size
+        y = h - 54
+
+        self.undo_rect = (x, y, size, size)
+
+        hovered = _inside(self.undo_rect, *self.mouse)
+        fill = (85, 85, 85) if hovered else DARK
+        border = WHITE if hovered else GRAY
+
+        cv2.rectangle(
+            frame,
+            (x, y),
+            (x + size - 1, y + size - 1),
+            fill,
+            -1,
+        )
+        cv2.rectangle(
+            frame,
+            (x, y),
+            (x + size - 1, y + size - 1),
+            border,
+            1,
+        )
+
+        # 되돌리기 화살표
+        cv2.putText(
+            frame,
+            "↶",
+            (x + 5, y + 27),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.0,
+            WHITE,
+            2,
+            cv2.LINE_AA,
+        )
