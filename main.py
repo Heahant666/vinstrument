@@ -121,6 +121,7 @@ def main():
 
             hand_data = tracker.process(frame)
 
+
             #선택한 악기에 따라 다른 소리재생 및 ui표시
             if selected_instrument == "piano":
 

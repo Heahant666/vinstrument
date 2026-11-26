@@ -30,7 +30,7 @@ class Piano:
 
         self.white_key_count = VISIBLE_KEYS
         self.white_key_width = self.width / VISIBLE_KEYS
-        self.black_key_width = self.white_key_width * 0.6
+        self.black_key_width = self.white_key_width
         self.black_key_height = self.height * 0.6
 
         # 옥타브 이동 버튼 위치
@@ -235,13 +235,13 @@ class Piano:
 
         # 웹캠 해상도에 맞춰 건반 크기 설정
         self.width = int(w * 0.9)
-        self.height = int(h * 0.35)
+        self.height = int(h * 0.10)
         self.x = (w - self.width) // 2
-        self.y = int(h * 0.50)
+        self.y = int(h * 0.75)
 
         self.white_key_width = self.width / VISIBLE_KEYS
         self.black_key_width = self.white_key_width * 0.6
-        self.black_key_height = self.height * 0.6
+        self.black_key_height = self.height
 
         kw = self.white_key_width
         offset = self.animation.get_offset(kw)
@@ -255,13 +255,32 @@ class Piano:
             x1, x2 = max(x1, left_lim), min(x2, right_lim)
             return (x1, x2) if x2 > x1 else None
 
+        def white_bounds(i):
+            # 왼쪽에 검은 건반이 있으면 그 절반만큼 공간 확보
+            left_gap = (
+                self.black_key_width / 2
+                if self._black_midi(i - 1) is not None else 0
+            )
+
+            # 오른쪽에 검은 건반이 있으면 그 절반만큼 공간 확보
+            right_gap = (
+                self.black_key_width / 2
+                if self._black_midi(i) is not None else 0
+            )
+
+            x1 = int(self.x + i * kw + offset + left_gap)
+            x2 = int(self.x + (i + 1) * kw + offset - right_gap)
+
+            return x1, x2
+
         # --------------------------------
         # 1. 흰 건반 (연하게) + 강조 건반 (진하게)
         # --------------------------------
         white_overlay = frame.copy()
         strong = []
         for i in key_range:
-            c = clip(int(self.x + i * kw + offset), int(self.x + (i + 1) * kw + offset))
+            x1, x2 = white_bounds(i)
+            c = clip(x1, x2)
             if c is None:
                 continue
             color = self.get_key_color(self._white_midi(i), WHITE)
@@ -273,10 +292,19 @@ class Piano:
 
         # 흰 건반 테두리
         for i in key_range:
-            c = clip(int(self.x + i * kw + offset), int(self.x + (i + 1) * kw + offset))
-            if c is not None:
-                cv2.rectangle(frame, (c[0], y_top), (c[1], y_bot), BLACK, 2)
+            x1, x2 = white_bounds(i)
+            c = clip(x1, x2)
 
+            if c is None:
+                continue
+
+            cv2.rectangle(
+                frame,
+                (c[0], y_top),
+                (c[1], y_bot),
+                BLACK,
+                1
+            )
         # 흰 건반 음이름
         label_overlay = frame.copy()
         for i in key_range:
@@ -294,19 +322,43 @@ class Piano:
         # --------------------------------
         black_overlay = frame.copy()
         strong = []
+
         for i in key_range:
             midi = self._black_midi(i)
+
             if midi is None:
                 continue
+
             center_x = self.x + (i + 1) * kw + offset
-            c = clip(int(center_x - self.black_key_width / 2), int(center_x + self.black_key_width / 2))
+
+            c = clip(
+                int(center_x - self.black_key_width / 2),
+                int(center_x + self.black_key_width / 2)
+            )
+
             if c is None:
                 continue
+
             color = self.get_key_color(midi, BLACK)
-            cv2.rectangle(black_overlay, (c[0], y_top), (c[1], y_black), BLACK, -1)
+
+            # 검은 건반을 투명하게 그림
+            cv2.rectangle(
+                black_overlay,
+                (c[0], y_top),
+                (c[1], y_bot),
+                BLACK,
+                -1
+            )
+
             if color != BLACK:
-                strong.append((c[0], c[1], y_top, y_black, color))
-        cv2.addWeighted(black_overlay, 0.65, frame, 0.35, 0, frame)
+                strong.append(
+                    (c[0], c[1], y_top, y_bot, color)
+                )
+
+        # 검은 건반 투명도 적용 (흰 건반과 동일하게 0.35)
+        cv2.addWeighted(black_overlay, 0.35, frame, 0.65, 0, frame)
+
+        # 눌린 검은 건반 강조
         self._paint_strong(frame, strong, 0.85)
 
         # --------------------------------
@@ -337,25 +389,54 @@ class Piano:
     # --------------------------------------------------
     # 손끝 좌표 → 건반
     # --------------------------------------------------
-
     def get_key_at(self, x, y):
-        # 건반보다 위쪽 100px까지 인식
-        detection_top = self.y - 100
+        detection_top = self.y - 60
 
-        if not (self.x <= x <= self.x + self.width and detection_top <= y <= self.y + self.height):
+        if not (
+            self.x <= x <= self.x + self.width
+            and detection_top <= y <= self.y + self.height
+        ):
             return None
 
-        # 1. 검은 건반부터 검사 (위에 겹쳐 있으므로)
+        kw = self.white_key_width
+
+        # 흰 건반 실제 경계
+        def white_bounds(i):
+            left_gap = (
+                self.black_key_width / 2
+                if self._black_midi(i - 1) is not None else 0
+            )
+
+            right_gap = (
+                self.black_key_width / 2
+                if self._black_midi(i) is not None else 0
+            )
+
+            x1 = int(self.x + i * kw + left_gap)
+            x2 = int(self.x + (i + 1) * kw - right_gap)
+
+            return x1, x2
+
+        # 1. 검은 건반 판정
         for i in range(VISIBLE_KEYS):
             midi = self._black_midi(i)
+
             if midi is None:
                 continue
-            center_x = self.x + (i + 1) * self.white_key_width
+
+            center_x = self.x + (i + 1) * kw
+
             x1 = center_x - self.black_key_width / 2
             x2 = center_x + self.black_key_width / 2
-            if x1 <= x <= x2 and detection_top <= y <= self.y + self.black_key_height:
+
+            if x1 <= x <= x2:
                 return midi
 
-        # 2. 흰 건반 검사
-        index = min(int((x - self.x) / self.white_key_width), VISIBLE_KEYS - 1)
-        return self._white_midi(index)
+        # 2. 흰 건반 판정
+        for i in range(VISIBLE_KEYS):
+            x1, x2 = white_bounds(i)
+
+            if x1 <= x <= x2:
+                return self._white_midi(i)
+
+        return None

@@ -145,16 +145,40 @@ class HandTracker:
             # 다섯 손가락의 좌표 저장
             fingers = {}
 
-            for finger_name, landmark_id in self.finger_tips.items():
+            # 손가락별 관절 번호
+            finger_joints = {
+                "thumb": [2, 3, 4],
+                "index": [5, 6, 7, 8],
+                "middle": [9, 10, 11, 12],
+                "ring": [13, 14, 15, 16],
+                "pinky": [17, 18, 19, 20]
+            }
 
-                landmark = landmarks[landmark_id]
-                x, y = points[landmark_id]
+            for finger_name, joint_ids in finger_joints.items():
 
-                # 픽셀 좌표와 정규화 좌표 모두 저장
+                # 손가락 관절 좌표 저장
+                joints = []
+
+                for landmark_id in joint_ids:
+                    landmark = landmarks[landmark_id]
+
+                    joints.append({
+                        "pixel": points[landmark_id],
+                        "normalized": (landmark.x, landmark.y)
+                    })
+
+                # 기존 손가락 끝 좌표도 유지
+                landmark_id = self.finger_tips[finger_name]
+
                 fingers[finger_name] = {
-                    "pixel": (x, y),
-                    "normalized": (landmark.x, landmark.y)
+                    "pixel": points[landmark_id],
+                    "normalized": (
+                        landmarks[landmark_id].x,
+                        landmarks[landmark_id].y
+                    ),
+                    "joints": joints
                 }
+
 
                 # 손가락 끝 강조 표시
                 cv2.circle(

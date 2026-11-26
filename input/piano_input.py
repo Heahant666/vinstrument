@@ -6,7 +6,7 @@ class PianoInput:
 
         # 하강 및 상승 판정 기준
         self.down_threshold = 18
-        self.up_threshold = 6
+        self.up_threshold = 3
         self.min_gesture = 18
 
         # 하강 동작을 인정하는 최소 프레임 수
@@ -29,11 +29,16 @@ class PianoInput:
 
                 x, y = finger_data["pixel"]
 
+                # 현재 손의 손목 좌표
+                wrist_x, wrist_y = hand["fingers"]["index"]["joints"][0]["pixel"]
+                # 손목을 기준으로 한 손가락 끝의 상대 위치
+                relative_y = y - wrist_y
                 finger_id = (handedness, finger_name)
                 active_fingers.add(finger_id)
 
                 # 현재 손가락이 위치한 건반 확인
                 midi = piano.get_key_at(x, y)
+    
 
                 # 인식 범위 밖이면 기록 삭제
                 if midi is None:
@@ -51,9 +56,9 @@ class PianoInput:
                     self.finger_states[finger_id] = {
                         "state": "ready",
                         "start_x": x,
-                        "start_y": y,
-                        "last_y": y,
-                        "bottom_y": y,
+                        "start_y": relative_y,
+                        "last_y": relative_y,
+                        "bottom_y": relative_y,
                         "down_count": 0,
                         "up_count": 0,
                         "midi": midi
@@ -62,7 +67,7 @@ class PianoInput:
                     continue
 
                 data = self.finger_states[finger_id]
-
+            
                 # ------------------------------------
                 # 건반 변경 확인
                 # ------------------------------------
@@ -74,9 +79,9 @@ class PianoInput:
                     data.update({
                         "state": "ready",
                         "start_x": x,
-                        "start_y": y,
-                        "last_y": y,
-                        "bottom_y": y,
+                        "start_y": relative_y,
+                        "last_y": relative_y,
+                        "bottom_y": relative_y,
                         "down_count": 0,
                         "up_count": 0,
                         "midi": midi
@@ -91,7 +96,7 @@ class PianoInput:
 
                     # 가장 아래쪽 위치 갱신
                     data["bottom_y"] = max(
-                        data["bottom_y"], y
+                        data["bottom_y"], relative_y
                     )
 
                     # 시작 위치에서 얼마나 내려갔는지 계산
@@ -110,7 +115,7 @@ class PianoInput:
                 elif data["state"] == "waiting_up":
 
                     # 가장 아래쪽 위치에서 현재 위치까지 올라온 거리
-                    moved_up = data["bottom_y"] - y
+                    moved_up = data["bottom_y"] - relative_y
 
                     # 충분히 내려갔다가 일정 거리 이상 올라왔는지 확인
                     if moved_up >= self.up_threshold:
@@ -130,7 +135,7 @@ class PianoInput:
 
                 elif data["state"] == "waiting_reset":
 
-                    if y <= data["start_y"] + 5:
+                    if relative_y <= data["start_y"] + 5:
 
                         data.update({
                             "state": "ready",
