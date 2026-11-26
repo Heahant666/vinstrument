@@ -172,10 +172,20 @@ class HandTracker:
                     1
                 )
 
+            # 손바닥 중심: 손목(0)과 손바닥 아래쪽 MCP 관절(5, 9, 13, 17)의 평균.
+            # 손가락 끝은 펼친 정도에 따라 위치가 크게 달라지므로 사용자 위치 추정에는
+            # 손바닥 중심을 우선 사용한다.
+            palm_ids = (0, 5, 9, 13, 17)
+            palm_center = (
+                int(sum(points[i][0] for i in palm_ids) / len(palm_ids)),
+                int(sum(points[i][1] for i in palm_ids) / len(palm_ids))
+            )
+
             # 한 손의 데이터 구성
             one_hand = {
                 "handedness": handedness,
-                "fingers": fingers
+                "fingers": fingers,
+                "palm_center": palm_center
             }
 
             hand_data["hands"].append(one_hand)
